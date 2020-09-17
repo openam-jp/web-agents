@@ -7,32 +7,60 @@ assignees: ''
 
 ---
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+<!--
+Provide a general summary of this issue in English, in the Title above.
+上のタイトル欄に、このIssueの概要を *英語で* 記入してください。
+-->
 
-**To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+## Description
+<!--
+Describe a more detailed introduction to the bug itself, and why you consider it to be a problem.
+-->
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+## Steps to reproduce
+<!--
+Please provide detailed steps for reproducing the issue.
+Include code to reproduce, if relevant.
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+Ex.
+- Testcase
+1. Go to '...'.
+1. Click on '....'.
+    1. Scroll down to '....'.
+    1. Input '....'.
+1. Click on '....'.
+1. See result.
+-->
 
-**Desktop (please complete the following information):**
- - OS: [e.g. iOS]
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
+## Expected Results
+<!--
+Explain in a clear and concise description what you expected to happen.
+-->
 
-**Smartphone (please complete the following information):**
- - Device: [e.g. iPhone6]
- - OS: [e.g. iOS8.1]
- - Browser [e.g. stock browser, safari]
- - Version [e.g. 22]
+## Actual Results
+<!---
+Explain what happens instead of the expected results.
+-->
 
-**Additional context**
-Add any other context about the problem here.
+## Enviroment
+<!--
+Include as many relevant details about the environment you experienced the bug in.
+If this part is unnecessary, please remove it.
+
+Ex.
+- Target version:
+- Operating system and version (desktop or mobile):
+- Web browser name and version:
+-->
+
+## Debug Log
+<!--
+Include any relevant log snippets or files here.
+If this item is unnecessary, please remove it.
+-->
+
+## References
+<!--
+It is described when there is a reference article.
+If this item is unnecessary, please remove it.
+-->
