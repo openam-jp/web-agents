@@ -12,12 +12,16 @@
  * information: "Portions copyright [year] [name of copyright owner]".
  *
  * Copyright 2015 - 2016 ForgeRock AS.
+ * Portions copyright 2021 OGIS-RI Co., Ltd.
  */
 
 #include "platform.h"
 #include "am.h"
 #include "utility.h"
 #include "net_client.h"
+#ifndef _WIN32
+#include "openssl/ssl.h"
+#endif
 
 #ifdef _WIN32
 #define AM_SSL_LIB "ssleay32"
@@ -38,7 +42,9 @@ static INIT_ONCE ssl_lib_initialized = INIT_ONCE_STATIC_INIT;
 static CRITICAL_SECTION *ssl_mutexes = NULL;
 #else
 static pthread_once_t ssl_lib_initialized = PTHREAD_ONCE_INIT;
+#ifdef _OpenSSL1_0
 static pthread_mutex_t *ssl_mutexes = NULL;
+#endif
 #endif
 static void *crypto_lib = NULL;
 static void *ssl_lib = NULL;
@@ -49,9 +55,17 @@ struct ssl_func {
 };
 
 static struct ssl_func ssl_sw[] = {
+#ifdef _OpenSSL1_0
     {"SSL_library_init", NULL},
+#elif _OpenSSL1_1
+    {"OPENSSL_init_ssl", NULL},
+#endif
     {"SSL_CTX_new", NULL},
+#ifdef _OpenSSL1_0
     {"SSLv23_client_method", NULL},
+#elif _OpenSSL1_1
+    {"TLS_client_method", NULL},
+#endif
     {"SSL_CTX_ctrl", NULL},
     {"SSL_CTX_set_cipher_list", NULL},
     {"SSL_CTX_load_verify_locations", NULL},
@@ -81,8 +95,12 @@ static struct ssl_func ssl_sw[] = {
     {"SSL_get_verify_result", NULL},
     {"SSL_state_string", NULL},
     {"SSL_state_string_long", NULL},
+#ifdef _OpenSSL1_0
     {"SSL_state", NULL},
     {"SSL_load_error_strings", NULL},
+#elif _OpenSSL1_1
+    {"SSL_get_state", NULL},
+#endif
     {"SSL_CTX_set_verify_depth", NULL},
 #ifndef _WIN32
     {"BIO_s_mem", NULL},
@@ -95,11 +113,17 @@ static struct ssl_func ssl_sw[] = {
 };
 
 static struct ssl_func crypto_sw[] = {
+#ifdef _OpenSSL1_0
     {"CRYPTO_num_locks", NULL},
     {"CRYPTO_set_locking_callback", NULL},
     {"CRYPTO_set_id_callback", NULL},
+#endif
     {"CRYPTO_set_mem_functions", NULL},
+#ifdef _OpenSSL1_0
     {"OPENSSL_add_all_algorithms_noconf", NULL},
+#elif _OpenSSL1_1
+    {"OPENSSL_init_crypto", NULL},
+#endif
     {"X509_get_subject_name", NULL},
     {"X509_get_issuer_name", NULL},
     {"X509_NAME_oneline", NULL},
@@ -135,7 +159,11 @@ static struct ssl_func crypto_sw[] = {
 #define SSL_CB_HANDSHAKE_DONE 0x20
 #define SSL_CTRL_OPTIONS 32
 #define SSL_CTRL_SET_MSG_CALLBACK_ARG 16
+#ifdef _OpenSSL1_0
 #define SSL_ST_OK 0x03
+#elif _OpenSSL1_1
+#define TLS_ST_OK 0x03
+#endif
 #define SSL_MODE_AUTO_RETRY 0x4
 #define SSL_CTRL_MODE 33
 #define SSL_MODE_ENABLE_PARTIAL_WRITE 0x1
@@ -145,6 +173,14 @@ static struct ssl_func crypto_sw[] = {
 #define SSL_SESS_CACHE_OFF 0x0000
 #define SSL_CTRL_SET_SESS_CACHE_MODE 44
 
+#ifdef _OpenSSL1_1
+#define OPENSSL_INIT_ADD_ALL_CIPHERS        0x00000004L
+#define OPENSSL_INIT_ADD_ALL_DIGESTS        0x00000008L
+#define OPENSSL_INIT_LOAD_SSL_STRINGS       0x00200000L
+#define OPENSSL_INIT_LOAD_CRYPTO_STRINGS    0x00000002L
+
+typedef struct ossl_init_settings_st OPENSSL_INIT_SETTINGS;
+#endif
 typedef struct ssl_st SSL;
 typedef struct ssl_ctx_st SSL_CTX;
 typedef struct ssl_method_st SSL_METHOD;
@@ -157,9 +193,17 @@ typedef struct X509_name_st X509_NAME;
 typedef struct bio_st BIO;
 typedef struct bio_method_st BIO_METHOD;
 
+#ifdef _OpenSSL1_0
 #define SSL_library_init (* (int (*)(void)) ssl_sw[0].ptr)
+#elif _OpenSSL1_1
+#define OPENSSL_init_ssl (* (int (*)(uint64_t, const OPENSSL_INIT_SETTINGS *)) ssl_sw[0].ptr)
+#endif
 #define SSL_CTX_new (* (SSL_CTX * (*)(SSL_METHOD *)) ssl_sw[1].ptr)
+#ifdef _OpenSSL1_0
 #define SSLv23_client_method (* (SSL_METHOD * (*)(void)) ssl_sw[2].ptr)
+#elif _OpenSSL1_1
+#define TLS_client_method (* (SSL_METHOD * (*)(void)) ssl_sw[2].ptr)
+#endif
 #define SSL_CTX_ctrl (* (long (*)(SSL_CTX *, int, long, void *)) ssl_sw[3].ptr)
 #define SSL_CTX_set_cipher_list (* (int (*)(SSL_CTX *,const char *)) ssl_sw[4].ptr)
 #define SSL_CTX_load_verify_locations (* (int (*)(SSL_CTX *, const char *, const char *)) ssl_sw[5].ptr)
@@ -189,17 +233,32 @@ typedef struct bio_method_st BIO_METHOD;
 #define SSL_get_verify_result (* (int (*)(const SSL *)) ssl_sw[29].ptr)
 #define SSL_state_string (* (const char * (*)(const SSL *)) ssl_sw[30].ptr)
 #define SSL_state_string_long (* (const char * (*)(const SSL *)) ssl_sw[31].ptr)
+#ifdef _OpenSSL1_0
 #define SSL_state (* (int (*)(const SSL *)) ssl_sw[32].ptr)
 #define SSL_load_error_strings (* (void (*)(void)) ssl_sw[33].ptr)
 #define SSL_CTX_set_verify_depth (* (void (*)(SSL_CTX *, int)) ssl_sw[34].ptr)
+#elif _OpenSSL1_1
+#define SSL_get_state (* (int (*)(const SSL *)) ssl_sw[32].ptr)
+#define SSL_CTX_set_verify_depth (* (void (*)(SSL_CTX *, int)) ssl_sw[33].ptr)
+#endif
+
 #ifndef _WIN32
+#ifdef _OpenSSL1_0
 #define BIO_s_mem (* (BIO_METHOD * (*)(void)) ssl_sw[35].ptr)
 #define BIO_new (* (BIO * (*)(BIO_METHOD *)) ssl_sw[36].ptr)
 #define BIO_write (* (int (*)(BIO *, const void *, int)) ssl_sw[37].ptr)
 #define BIO_read (* (int (*)(BIO *, void *, int)) ssl_sw[38].ptr)
 #define BIO_ctrl (* (long (*)(BIO *, int, long, void *)) ssl_sw[39].ptr)
+#elif _OpenSSL1_1
+#define BIO_s_mem (* (BIO_METHOD * (*)(void)) ssl_sw[34].ptr)
+#define BIO_new (* (BIO * (*)(BIO_METHOD *)) ssl_sw[35].ptr)
+#define BIO_write (* (int (*)(BIO *, const void *, int)) ssl_sw[36].ptr)
+#define BIO_read (* (int (*)(BIO *, void *, int)) ssl_sw[37].ptr)
+#define BIO_ctrl (* (long (*)(BIO *, int, long, void *)) ssl_sw[38].ptr)
+#endif
 #endif
 
+#ifdef _OpenSSL1_0
 #define CRYPTO_num_locks (* (int (*)(void)) crypto_sw[0].ptr)
 #define CRYPTO_set_locking_callback (* (void (*)(void (*)(int, int, const char *, int))) crypto_sw[1].ptr)
 #define CRYPTO_set_id_callback (* (void (*)(unsigned long (*)(void))) crypto_sw[2].ptr)
@@ -211,6 +270,17 @@ typedef struct bio_method_st BIO_METHOD;
 #define X509_free (* (void (*)(X509 *)) crypto_sw[8].ptr)
 #define ERR_get_error (* (unsigned long (*)(void)) crypto_sw[9].ptr)
 #define ERR_error_string (* (char * (*)(unsigned long, char *)) crypto_sw[10].ptr)
+#elif _OpenSSL1_1
+#define CRYPTO_set_mem_functions (* (int (*)(void *(*m)(size_t),void *(*r)(void *,size_t), void (*f)(void *))) crypto_sw[0].ptr)
+#define OPENSSL_init_crypto (* (int (*)(uint64_t, const OPENSSL_INIT_SETTINGS *)) crypto_sw[1].ptr)
+#define X509_get_subject_name (* (X509_NAME * (*)(X509 *)) crypto_sw[2].ptr)
+#define X509_get_issuer_name (* (X509_NAME * (*)(X509 *)) crypto_sw[3].ptr)
+#define X509_NAME_oneline (* (char * (*)(X509_NAME *, char *, int)) crypto_sw[4].ptr)
+#define X509_free (* (void (*)(X509 *)) crypto_sw[5].ptr)
+#define ERR_get_error (* (unsigned long (*)(void)) crypto_sw[6].ptr)
+#define ERR_error_string (* (char * (*)(unsigned long, char *)) crypto_sw[7].ptr)
+#endif
+
 #ifdef _WIN32
 #define BIO_s_mem (* (BIO_METHOD * (*)(void)) crypto_sw[11].ptr)
 #define BIO_new (* (BIO * (*)(BIO_METHOD *)) crypto_sw[12].ptr)
@@ -404,6 +474,7 @@ static char ssl_is_fatal_error(am_net_t *net, int ssl_error) {
     return 1;
 }
 
+#ifdef _OpenSSL1_0
 static void ssl_locking_callback(int mode, int mutex_num, const char *file, int line) {
     if (mode & 1) {
 #ifdef _WIN32
@@ -427,6 +498,7 @@ static unsigned long ssl_id_callback(void) {
     return (unsigned long) pthread_self();
 #endif
 }
+#endif
 
 static
 #ifdef _WIN32
@@ -439,10 +511,12 @@ init_ssl(
         PINIT_ONCE io, PVOID p, PVOID *c
 #endif
         ) {
+#ifdef _OpenSSL1_0
     int i, size;
+#endif
 
 #ifdef _WIN32
-    wchar_t dll_path[AM_URI_SIZE];
+    wchar_t dll_path[AM_FNAME_SIZE];
     ADD_DLL_PROC add_directory =
             (ADD_DLL_PROC) GetProcAddress(GetModuleHandleA("kernel32.dll"), "AddDllDirectory");
     if (add_directory != NULL) {
@@ -475,9 +549,14 @@ init_ssl(
     ssl_lib = load_library(AM_SSL_LIB, ssl_sw);
     crypto_lib = load_library(AM_CRYPTO_LIB, crypto_sw);
     if (ssl_lib != NULL && crypto_lib != NULL &&
+#ifdef _OpenSSL1_0
             CRYPTO_set_mem_functions && SSL_library_init && SSL_load_error_strings && CRYPTO_num_locks &&
             CRYPTO_set_id_callback && CRYPTO_set_locking_callback && OPENSSL_add_all_algorithms_noconf) {
+#elif _OpenSSL1_1
+            CRYPTO_set_mem_functions && OPENSSL_init_ssl && OPENSSL_init_crypto) {
+#endif
         CRYPTO_set_mem_functions(malloc, realloc, free);
+#ifdef _OpenSSL1_0
         SSL_load_error_strings();
         SSL_library_init();
 #ifdef _WIN32
@@ -496,6 +575,10 @@ init_ssl(
         CRYPTO_set_id_callback(ssl_id_callback);
         CRYPTO_set_locking_callback(ssl_locking_callback);
         OPENSSL_add_all_algorithms_noconf();
+#elif _OpenSSL1_1
+        OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS | OPENSSL_INIT_LOAD_CRYPTO_STRINGS, NULL);
+        OPENSSL_init_crypto(OPENSSL_INIT_ADD_ALL_CIPHERS | OPENSSL_INIT_ADD_ALL_DIGESTS, NULL);
+#endif
     } else {
         if (ssl_lib != NULL) close_library(ssl_lib);
         if (crypto_lib != NULL) close_library(crypto_lib);
@@ -528,6 +611,7 @@ void am_net_init_ssl_reset() {
 }
 
 void net_shutdown_ssl() {
+#ifdef _OpenSSL1_0
     int i;
     if (SSL_library_init && CRYPTO_set_locking_callback
             && CRYPTO_set_id_callback && CRYPTO_num_locks) {
@@ -545,6 +629,7 @@ void net_shutdown_ssl() {
         }
     }
     ssl_mutexes = NULL;
+#endif
     if (ssl_lib != NULL) close_library(ssl_lib);
     if (crypto_lib != NULL) close_library(crypto_lib);
     ssl_lib = NULL;
@@ -648,7 +733,11 @@ void net_connect_ssl(am_net_t *n) {
         n->ssl.error = AM_SUCCESS;
 
         /*check whether we have ssl library loaded and symbols are available*/
+#ifdef _OpenSSL1_0
         if (SSL_CTX_new == NULL || SSLv23_client_method == NULL || SSL_CTX_set_msg_callback == NULL ||
+#elif _OpenSSL1_1
+        if (SSL_CTX_new == NULL || TLS_client_method == NULL || SSL_CTX_set_msg_callback == NULL ||
+#endif
                 SSL_CTX_ctrl == NULL || BIO_new == NULL || BIO_s_mem == NULL ||
                 SSL_set_bio == NULL || SSL_set_connect_state == NULL ||
                 SSL_do_handshake == NULL || SSL_new == NULL || SSL_get_error == NULL) {
@@ -657,7 +746,11 @@ void net_connect_ssl(am_net_t *n) {
             return;
         }
 
+#ifdef _OpenSSL1_0
         n->ssl.ssl_context = SSL_CTX_new(SSLv23_client_method());
+#elif _OpenSSL1_1
+        n->ssl.ssl_context = SSL_CTX_new(TLS_client_method());
+#endif
         if (n->ssl.ssl_context == NULL) {
             AM_LOG_ERROR(n->instance_id, "%s failed to create a new SSL context, error: %s",
                     thisfunc, read_ssl_error());
@@ -847,7 +940,11 @@ int net_read_ssl(am_net_t *n, const char *buf, int sz) {
     }
 
     BIO_write(n->ssl.read_bio, buf, sz);
+#ifdef _OpenSSL1_0
     if (SSL_state(n->ssl.ssl_handle) != SSL_ST_OK) {
+#elif _OpenSSL1_1
+    if (SSL_get_state(n->ssl.ssl_handle) != TLS_ST_OK) {
+#endif
         ret = SSL_connect(n->ssl.ssl_handle);
         write_bio_to_socket(n);
         if (ret != 1) {

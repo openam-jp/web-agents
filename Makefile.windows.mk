@@ -12,6 +12,7 @@
 # information: "Portions copyright [year] [name of copyright owner]".
 #
 # Copyright 2014 - 2016 ForgeRock AS.
+# Portions copyright 2021 OGIS-RI Co., Ltd.
 #
 
 ifndef	WINDOWS_MK_INCLUDED
@@ -27,7 +28,7 @@ RC = rc
 SHARED = /DLL
 
 CFLAGS  += /O2 /Oi /GL /Gy /GT /D _CRT_SECURE_NO_WARNINGS /wd4996 /wd4101 /wd4244 /wd4995 /wd4275 \
-	/EHa /nologo /Zi /errorReport:none /MP /Gm- /W3 /c /TC /D WIN32 /D _WIN32 /D ZLIB_WINAPI /D PCRE_STATIC
+	/EHa /nologo /Zi /errorReport:none /MP /Gm- /W3 /c /TC /D WIN32 /D _WIN32 /D ZLIB_WINAPI /D PCRE_STATIC /D _OpenSSL1_0
 
 LDFLAGS += /SUBSYSTEM:CONSOLE /NOLOGO /INCREMENTAL:NO /errorReport:none /MANIFEST:NO \
 	/OPT:REF /OPT:ICF /LTCG /DYNAMICBASE /NXCOMPAT /DEBUG

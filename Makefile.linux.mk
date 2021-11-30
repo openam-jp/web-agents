@@ -12,6 +12,7 @@
 # information: "Portions copyright [year] [name of copyright owner]".
 #
 # Copyright 2014 - 2016 ForgeRock AS.
+# Portions copyright 2021 OGIS-RI Co., Ltd.
 #
 
 ifndef	LINUX_MK_INCLUDED
@@ -22,6 +23,7 @@ SHARED := -shared
 
 CFLAGS  += -fPIC -pthread -std=gnu99 -D_REENTRANT -DLINUX -D_GNU_SOURCE -D_FORTIFY_SOURCE=2 -fstack-protector \
 	    -Wno-unused-value -Wno-deprecated-declarations
+CFLAGS += -D$(shell echo $(OPENSSL_VERSION))
 	
 ifdef DEBUG
  CFLAGS += -g3 -fno-inline -O0 -DDEBUG -Wall
